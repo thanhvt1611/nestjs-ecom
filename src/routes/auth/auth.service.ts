@@ -3,7 +3,7 @@ import { RoleService } from './role.service';
 import { HashingService } from '../../shared/services/hashing.service';
 import { PrismaService } from '../../shared/services/prisma.service';
 import { isUniqueConstraintError } from '../../shared/helpers';
-import { RegisterBodyDTO } from './auth.dto';
+import { RegisterBodyDTO, UserType } from './auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -13,7 +13,7 @@ export class AuthService {
     private readonly hashingService: HashingService,
   ) {}
 
-  async register(body: RegisterBodyDTO) {
+  async register(body: RegisterBodyDTO): Promise<UserType> {
     try {
       const clientRoleId = await this.roleService.getClientRoleID();
       const { confirmPassword, ...bodyData } = body;
@@ -32,7 +32,7 @@ export class AuthService {
         },
       });
 
-      return user;
+      return user as any;
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         throw new ConflictException('Email already exists');

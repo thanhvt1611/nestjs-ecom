@@ -12,9 +12,9 @@ const UserSchema = z.object({
   roleId: z.number(),
   createdById: z.number().nullable(),
   updatedById: z.number().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  deletedAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
 });
 
 const RegisterBodySchema = z
@@ -39,3 +39,5 @@ const RegisterBodySchema = z
 export class RegisterBodyDTO extends createZodDto(RegisterBodySchema) {}
 
 export class RegisterResDTO extends createZodDto(UserSchema) {}
+
+export type UserType = z.infer<typeof UserSchema>;
