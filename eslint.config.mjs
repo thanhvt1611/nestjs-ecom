@@ -35,6 +35,7 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/only-throw-error': 'off',
+      '@typescript-eslint/no-unused-vars': 'off'
     },
   },
 );

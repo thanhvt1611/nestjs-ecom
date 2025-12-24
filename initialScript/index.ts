@@ -1,7 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 import bcrypt from 'bcryptjs';
-import { UserRole } from '../src/shared/constants/user';
+import { RoleName } from '../src/shared/constants/user';
 import envConfig from '../src/shared/config';
 
 const prisma = new PrismaClient({
@@ -18,16 +18,16 @@ async function main() {
     }
     const { count: createdRoles } = await prisma.role.createMany({
       data: [
-        { name: UserRole.Admin, description: 'Quản trị viên' },
-        { name: UserRole.Client, description: 'Khách hàng' },
-        { name: UserRole.Seller, description: 'Nhân viên bán hàng' },
+        { name: RoleName.Admin, description: 'Quản trị viên' },
+        { name: RoleName.Client, description: 'Khách hàng' },
+        { name: RoleName.Seller, description: 'Nhân viên bán hàng' },
       ],
     });
 
     //get roleId of admin
     const adminRoleId = await prisma.role.findUniqueOrThrow({
       where: {
-        name: UserRole.Admin,
+        name: RoleName.Admin,
       },
       select: {
         id: true,
