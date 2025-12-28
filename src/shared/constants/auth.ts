@@ -21,3 +21,14 @@ export type AuthDecoratorPayload = {
   authKey: AuthKeyType[];
   option: { condition: ConditionKeyType };
 };
+
+export const UserStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+  BLOCKED: 'BLOCKED',
+} as const;
+
+export const TypeOfVerificationCode = {
+  REGISTER: 'REGISTER',
+  FORGOT_PASSWORD: 'FORGOT_PASSWORD',
+} as const;

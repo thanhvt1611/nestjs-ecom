@@ -31,6 +31,7 @@ enum VerificationCodeType {
 
 enum UserStatus {
   ACTIVE
+  INACTIVE
   BLOCKED
 }
 
