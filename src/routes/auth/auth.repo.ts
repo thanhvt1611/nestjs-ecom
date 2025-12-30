@@ -3,6 +3,7 @@ import { PrismaService } from '../../shared/services/prisma.service';
 import { SerializeAll } from '../../shared/constants/serialize.decorator';
 import { UserType } from '../../shared/models/shared-user.model';
 import { VerificationCodeType } from './auth.model';
+import { TypeOfVerificationCode } from '../../shared/constants/auth';
 
 @Injectable()
 @SerializeAll()
@@ -21,30 +22,26 @@ export class AuthRepository {
     }) as any;
   }
 
-  async storeVerificationCode(
+  storeVerificationCode(
     payload: Pick<VerificationCodeType, 'email' | 'code' | 'type' | 'expiresAt'>,
   ): Promise<VerificationCodeType> {
-    const find = await this.prismaService.verificationCode.findFirst({
+    return this.prismaService.verificationCode.upsert({
       where: {
         email: payload.email,
       },
-      select: {
-        id: true,
+      update: {
+        code: payload.code,
+        expiresAt: payload.expiresAt,
       },
-    });
-    if (find) {
-      return this.prismaService.verificationCode.update({
-        where: {
-          id: find.id,
-        },
-        data: {
-          code: payload.code,
-          expiresAt: payload.expiresAt,
-        },
-      }) as any;
-    }
-    return this.prismaService.verificationCode.create({
-      data: payload,
+      create: payload,
+    }) as any;
+  }
+
+  findUniqueVerificationCode(
+    payload: { email: string } | { code: string } | { email: string; code: string; type: TypeOfVerificationCode },
+  ): Promise<VerificationCodeType | null> {
+    return this.prismaService.verificationCode.findUnique({
+      where: payload,
     }) as any;
   }
 }

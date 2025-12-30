@@ -33,7 +33,7 @@ async function main() {
         id: true,
       },
     });
-    const user = await prisma.user.findFirstOrThrow({
+    const user = await prisma.user.findFirst({
       where: {
         roleId: adminRoleId.id,
       },
@@ -46,7 +46,7 @@ async function main() {
     const hashPassword = bcrypt.hashSync('password@123', 10);
     const userAdmin = await prisma.user.create({
       data: {
-        email: 'thanhvt1611@gmail.com',
+        email: 'thanhvttb170@gmail.com',
         name: 'Vũ Tiến Thành',
         password: hashPassword,
         roleId: adminRoleId.id,
