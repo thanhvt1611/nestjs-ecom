@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/services/prisma.service';
 import { SerializeAll } from '../../shared/constants/serialize.decorator';
 import { UserType } from '../../shared/models/shared-user.model';
-import { VerificationCodeType } from './auth.model';
+import { DeviceType, RefreshTokenType, VerificationCodeType } from './auth.model';
 import { TypeOfVerificationCode } from '../../shared/constants/auth';
 
 @Injectable()
@@ -43,5 +43,15 @@ export class AuthRepository {
     return this.prismaService.verificationCode.findUnique({
       where: payload,
     }) as any;
+  }
+
+  createRefreshToken(payload: { data: Omit<RefreshTokenType, 'createdAt'> }) {
+    return this.prismaService.refreshToken.create(payload);
+  }
+
+  createDevice(
+    data: Pick<DeviceType, 'userId' | 'userAgent' | 'ip'> & Partial<Pick<DeviceType, 'isActive' | 'lastActive'>>,
+  ) {
+    return this.prismaService.device.create({ data });
   }
 }

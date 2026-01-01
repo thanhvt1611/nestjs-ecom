@@ -8,6 +8,9 @@ export class SharedUserRepository {
   async findUnique(unique: { email: string } | { id: number }) {
     return this.prismaService.user.findUnique({
       where: unique,
+      include: {
+        role: true,
+      },
     });
   }
 }
