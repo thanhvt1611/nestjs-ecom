@@ -1,7 +1,7 @@
-import { Injectable, UnprocessableEntityException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnprocessableEntityException, UnauthorizedException, HttpException } from '@nestjs/common';
 import { RoleService } from './role.service';
 import { HashingService } from '../../shared/services/hashing.service';
-import { isUniqueConstraintError, randomOTP } from '../../shared/helpers';
+import { isNotFoundError, isUniqueConstraintError, randomOTP } from '../../shared/helpers';
 import { LoginBodyType, RegisterBodyType, RegisterResType, VerificationBodyType } from './auth.model';
 import { AuthRepository } from './auth.repo';
 import { SharedUserRepository } from '../../shared/repositories/shared-user.repo';
@@ -12,6 +12,7 @@ import { TypeOfVerificationCode } from '../../shared/constants/auth';
 import { EmailService } from '../../shared/services/email.service';
 import { TokenService } from '../../shared/services/token.service';
 import { AccessTokenCreatePayload } from '../../shared/types/token.type';
+import { RefreshTokenBodyDTO } from './auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -94,7 +95,7 @@ export class AuthService {
       });
     }
 
-    return verificationCode;
+    return { message: 'Verification code sent' };
   }
 
   async login(body: LoginBodyType & { userAgent: string; ip: string }) {
@@ -152,52 +153,56 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  // async refreshToken(refreshToken: string) {
-  //   try {
-  //     const refreshTokenRecord = await this.prisma.refreshToken.findFirstOrThrow({
-  //       where: {
-  //         token: refreshToken,
-  //       },
-  //     });
+  async refreshToken({ refreshToken, userAgent, ip }: RefreshTokenBodyDTO & { userAgent: string; ip: string }) {
+    try {
+      const refreshTokenRecord = await this.authRepository.findUniqueRefreshToken({
+        token: refreshToken,
+      });
 
-  //     await this.prisma.refreshToken.delete({
-  //       where: {
-  //         id: refreshTokenRecord.id,
-  //       },
-  //     });
+      if (!refreshTokenRecord) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
-  //     const refreshTokenDecode = await this.tokenService.verifyRefreshToken(refreshToken);
-  //     const userId = refreshTokenDecode.userId;
-  //     const tokens = await this.generateTokens(userId);
-  //     return tokens;
-  //   } catch (error) {
-  //     if (isNotFoundError(error)) {
-  //       throw new UnauthorizedException('Invalid refresh token');
-  //     }
-  //     throw error;
-  //   }
-  // }
+      const $updateDevice = this.authRepository.updateDevice(refreshTokenRecord.deviceId, {
+        userAgent,
+        ip,
+      });
 
-  // async logout(refreshToken: string) {
-  //   try {
-  //     const refreshTokenRecord = await this.prisma.refreshToken.findFirstOrThrow({
-  //       where: {
-  //         token: refreshToken,
-  //       },
-  //     });
+      const $deleteRefreshToken = this.authRepository.deleteRefreshToken(refreshToken);
 
-  //     await this.prisma.refreshToken.delete({
-  //       where: {
-  //         id: refreshTokenRecord.id,
-  //       },
-  //     });
+      const $tokens = this.generateTokens({
+        userId: refreshTokenRecord.user.id,
+        roleId: refreshTokenRecord.user.roleId,
+        roleName: refreshTokenRecord.user.role.name,
+        deviceId: refreshTokenRecord.deviceId,
+      });
 
-  //     return { message: 'Logout successfully' };
-  //   } catch (error) {
-  //     if (isNotFoundError(error)) {
-  //       throw new UnauthorizedException('Invalid refresh token');
-  //     }
-  //     throw error;
-  //   }
-  // }
+      const [, , tokens] = await Promise.all([$updateDevice, $deleteRefreshToken, $tokens]);
+      return tokens;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw error;
+    }
+  }
+
+  async logout(refreshToken: string) {
+    try {
+      await this.tokenService.verifyRefreshToken(refreshToken);
+
+      const refreshTokenRecord = await this.authRepository.deleteRefreshToken(refreshToken);
+
+      await this.authRepository.updateDevice(refreshTokenRecord.deviceId, {
+        isActive: false,
+      });
+
+      return { message: 'Logout successfully' };
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      throw error;
+    }
+  }
 }

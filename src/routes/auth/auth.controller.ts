@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import {
   LoginBodyDTO,
   LoginResDTO,
+  LogoutBodyDTO,
   RefreshTokenBodyDTO,
   RefreshTokenResDTO,
   RegisterBodyDTO,
@@ -11,38 +12,44 @@ import {
 } from './auth.dto';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { RealIp } from '../../shared/decorators/real-ip.decorator';
+import { MessageResDTO } from '../../shared/dtos/respose.dto';
+import { IsPublic } from '../../shared/decorators/auth.decorator';
+import { PublicGet, PublicPost } from '../../shared/decorators/public-route.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
+  @PublicGet('register')
   @ZodSerializerDto(RegisterResDTO)
-  async register(@Body() body: RegisterBodyDTO) {
+  register(@Body() body: RegisterBodyDTO) {
     return this.authService.register(body);
   }
 
-  @Post('otp')
+  @PublicPost('otp')
+  @HttpCode(HttpStatus.OK)
+  @ZodSerializerDto(MessageResDTO)
   sendOTP(@Body() body: VerificationBodyDTO) {
     return this.authService.sendOTP(body);
   }
 
-  @Post('login')
+  @PublicPost('login')
   @ZodSerializerDto(LoginResDTO)
-  async login(@Body() body: LoginBodyDTO, @Headers('User-Agent') userAgent: string, @RealIp() ip: string) {
-    return await this.authService.login({ ...body, userAgent, ip });
+  login(@Body() body: LoginBodyDTO, @Headers('User-Agent') userAgent: string, @RealIp() ip: string) {
+    return this.authService.login({ ...body, userAgent, ip });
   }
 
-  // @Post('refresh-token')
-  // @HttpCode(HttpStatus.OK)
-  // @ZodSerializerDto(RefreshTokenResDTO)
-  // async refreshToken(@Body() body: RefreshTokenBodyDTO) {
-  //   return await this.authService.refreshToken(body.refreshToken);
-  // }
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+  @ZodSerializerDto(RefreshTokenResDTO)
+  refreshToken(@Body() body: RefreshTokenBodyDTO, @Headers('User-Agent') userAgent: string, @RealIp() ip: string) {
+    return this.authService.refreshToken({ ...body, userAgent, ip });
+  }
 
-  // @Post('logout')
-  // @HttpCode(HttpStatus.OK)
-  // async logout(@Body() body: LogoutBodyDTO) {
-  //   return new LogoutResDTO(await this.authService.logout(body.refreshToken));
-  // }
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ZodSerializerDto(MessageResDTO)
+  logout(@Body() body: LogoutBodyDTO) {
+    return this.authService.logout(body.refreshToken);
+  }
 }
