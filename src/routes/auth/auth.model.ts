@@ -113,3 +113,16 @@ export type RefreshTokenType = z.infer<typeof RefreshTokenSchema>;
 export const LogoutBodySchema = RefreshTokenBodySchema;
 
 export type LogoutBodyType = RefreshTokenBodyType;
+
+export const GoogleAuthUrlSchema = z.object({
+  userAgent: z.string(),
+  ip: z.string(),
+});
+
+export type GoogleAuthUrlType = z.infer<typeof GoogleAuthUrlSchema>;
+
+export const GoogleAuthUrlResSchema = z.object({
+  url: z.string(),
+});
+
+export type GoogleAuthUrlResType = z.infer<typeof GoogleAuthUrlResSchema>;

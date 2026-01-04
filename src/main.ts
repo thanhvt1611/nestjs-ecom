@@ -12,6 +12,13 @@ async function bootstrap() {
   // Hoặc: app.set('trust proxy', 'loopback, linklocal, uniquelocal')
   app.set('trust proxy', true);
 
+  app.enableCors({
+    origin: 'http://localhost:3300',
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Authorization',
+  });
+
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

@@ -7,14 +7,13 @@ import {
   RefreshTokenCreatePayload,
   RefreshTokenPayload,
 } from '../types/token.type';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class TokenService {
   constructor(private jwtService: JwtService) {}
 
   signAccessToken(payload: AccessTokenCreatePayload) {
-    return this.jwtService.signAsync({ ...payload, uuid: uuidv4() }, {
+    return this.jwtService.signAsync({ ...payload, uuid: crypto.randomUUID() }, {
       secret: envConfig.ACCESS_TOKEN_SECRET,
       expiresIn: envConfig.ACCESS_TOKEN_EXPIRES_IN,
       algorithm: 'HS256',
@@ -22,7 +21,7 @@ export class TokenService {
   }
 
   signRefreshToken(payload: RefreshTokenCreatePayload) {
-    return this.jwtService.signAsync({ ...payload, uuid: uuidv4() }, {
+    return this.jwtService.signAsync({ ...payload, uuid: crypto.randomUUID() }, {
       secret: envConfig.REFRESH_TOKEN_SECRET,
       expiresIn: envConfig.REFRESH_TOKEN_EXPIRES_IN,
       algorithm: 'HS256',

@@ -79,7 +79,7 @@ export class AuthService {
     //2. nếu chưa tồn tại thì tạo/cập nhật mã code
     const code = randomOTP();
     const expiresInMs = ms(envConfig.OTP_EXPIRES_IN as Parameters<typeof ms>[0]);
-    const verificationCode = await this.authRepository.storeVerificationCode({
+    await this.authRepository.storeVerificationCode({
       email: body.email,
       code,
       type: body.type,
@@ -99,7 +99,7 @@ export class AuthService {
   }
 
   async login(body: LoginBodyType & { userAgent: string; ip: string }) {
-    const user = await this.sharedUserRepository.findUnique({
+    const user = await this.sharedUserRepository.findUniqueUserAndRole({
       email: body.email,
     });
 

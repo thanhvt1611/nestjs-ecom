@@ -8,6 +8,16 @@ export class SharedUserRepository {
   async findUnique(unique: { email: string } | { id: number }) {
     return this.prismaService.user.findUnique({
       where: unique,
+      omit: {
+        password: true,
+        totpSecret: true,
+      },
+    });
+  }
+
+  findUniqueUserAndRole(unique: { email: string } | { id: number }) {
+    return this.prismaService.user.findUnique({
+      where: unique,
       include: {
         role: true,
       },

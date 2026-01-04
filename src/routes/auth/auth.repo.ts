@@ -85,4 +85,13 @@ export class AuthRepository {
       },
     });
   }
+
+  createUserIncludeRole(user: Pick<UserType, 'email' | 'name' | 'phoneNumber' | 'password' | 'roleId' | 'avatar'>) {
+    return this.prismaService.user.create({
+      data: user,
+      include: {
+        role: true,
+      },
+    });
+  }
 }
