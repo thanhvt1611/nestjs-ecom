@@ -126,3 +126,23 @@ export const GoogleAuthUrlResSchema = z.object({
 });
 
 export type GoogleAuthUrlResType = z.infer<typeof GoogleAuthUrlResSchema>;
+
+export const ForgotPasswordBodySchema = z
+  .object({
+    email: z.email(),
+    code: z.string().length(6),
+    newPassword: z.string().min(6).max(100),
+    confirmNewPassword: z.string().min(6).max(100),
+  })
+  .strict()
+  .superRefine(({ newPassword, confirmNewPassword }, ctx) => {
+    if (newPassword !== confirmNewPassword) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Password and confirm password must match',
+        path: ['confirmNewPassword'],
+      });
+    }
+  });
+
+export type ForgotPasswordBodyType = z.infer<typeof ForgotPasswordBodySchema>;

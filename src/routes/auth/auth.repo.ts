@@ -28,10 +28,12 @@ export class AuthRepository {
     return this.prismaService.verificationCode.upsert({
       where: {
         email: payload.email,
+        type: payload.type,
       },
       update: {
         code: payload.code,
         expiresAt: payload.expiresAt,
+        type: payload.type,
       },
       create: payload,
     }) as any;
@@ -92,6 +94,21 @@ export class AuthRepository {
       include: {
         role: true,
       },
+    });
+  }
+
+  updateUser(where: { email: string } | { id: number }, data: Partial<Omit<UserType, 'id'>>) {
+    return this.prismaService.user.update({
+      where,
+      data,
+    });
+  }
+
+  deleteVerificationCode(
+    uniqueObj: { email: string } | { code: string } | { email: string; code: string; type: TypeOfVerificationCode },
+  ) {
+    return this.prismaService.verificationCode.delete({
+      where: uniqueObj,
     });
   }
 }

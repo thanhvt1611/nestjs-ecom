@@ -2,7 +2,13 @@ import { Injectable, UnprocessableEntityException, UnauthorizedException, HttpEx
 import { RoleService } from './role.service';
 import { HashingService } from '../../shared/services/hashing.service';
 import { isNotFoundError, isUniqueConstraintError, randomOTP } from '../../shared/helpers';
-import { LoginBodyType, RegisterBodyType, RegisterResType, VerificationBodyType } from './auth.model';
+import {
+  ForgotPasswordBodyType,
+  LoginBodyType,
+  RegisterBodyType,
+  RegisterResType,
+  VerificationBodyType,
+} from './auth.model';
 import { AuthRepository } from './auth.repo';
 import { SharedUserRepository } from '../../shared/repositories/shared-user.repo';
 import { addMilliseconds } from 'date-fns';
@@ -13,6 +19,15 @@ import { EmailService } from '../../shared/services/email.service';
 import { TokenService } from '../../shared/services/token.service';
 import { AccessTokenCreatePayload } from '../../shared/types/token.type';
 import { RefreshTokenBodyDTO } from './auth.dto';
+import {
+  EmailAlreadyExistsException,
+  EmailNotFoundException,
+  FailedToSendOTPException,
+  InvalidOTPException,
+  InvalidPassword,
+  OTPExpiredException,
+  RefreshTokenAlreadyUsedException,
+} from './error.model';
 
 @Injectable()
 export class AuthService {
@@ -27,40 +42,27 @@ export class AuthService {
 
   async register(body: RegisterBodyType): Promise<RegisterResType> {
     try {
-      const verificationCode = await this.authRepository.findUniqueVerificationCode({
-        email: body.email,
-        code: body.code,
-        type: TypeOfVerificationCode.REGISTER,
-      });
-
-      if (!verificationCode) {
-        throw new UnprocessableEntityException({
-          path: 'code',
-          message: 'Invalid verification code',
-        });
-      }
-
-      if (new Date(verificationCode.expiresAt) < new Date()) {
-        throw new UnprocessableEntityException({
-          path: 'code',
-          message: 'Verification code expired',
-        });
-      }
+      const verificationCodePayload = { email: body.email, code: body.code, type: TypeOfVerificationCode.REGISTER };
+      await this.validateVerificationCode(verificationCodePayload);
 
       const clientRoleId = await this.roleService.getClientRoleID();
       const { confirmPassword, code, ...bodyData } = body;
       const hashPassword = await this.hashingService.hashPassword(bodyData.password);
-      return await this.authRepository.createUser({
+
+      const $deleteVerificationCode = this.authRepository.deleteVerificationCode(verificationCodePayload);
+
+      const $createUser = this.authRepository.createUser({
         ...bodyData,
         password: hashPassword,
         roleId: clientRoleId,
       });
+
+      const [, user] = await Promise.all([$deleteVerificationCode, $createUser]);
+
+      return user;
     } catch (error) {
       if (isUniqueConstraintError(error)) {
-        throw new UnprocessableEntityException({
-          path: 'email',
-          message: 'Email already exists',
-        });
+        throw EmailAlreadyExistsException;
       }
       throw error;
     }
@@ -69,11 +71,12 @@ export class AuthService {
   async sendOTP(body: VerificationBodyType) {
     //1. kiểm tra email đã tồn tại trong bản user hay chưa
     const user = await this.sharedUserRepository.findUnique({ email: body.email });
-    if (user) {
-      throw new UnprocessableEntityException({
-        path: 'email',
-        message: 'Email already exists',
-      });
+    if (user && body.type === TypeOfVerificationCode.REGISTER) {
+      throw EmailAlreadyExistsException;
+    }
+
+    if (!user && body.type === TypeOfVerificationCode.FORGOT_PASSWORD) {
+      throw EmailNotFoundException;
     }
 
     //2. nếu chưa tồn tại thì tạo/cập nhật mã code
@@ -89,10 +92,7 @@ export class AuthService {
     //3. gửi mã code về email
     const { error } = this.emailService.sendOTP(body.email, code);
     if (error) {
-      throw new UnprocessableEntityException({
-        path: 'code',
-        message: 'Failed to send verification code',
-      });
+      throw FailedToSendOTPException;
     }
 
     return { message: 'Verification code sent' };
@@ -104,18 +104,12 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnprocessableEntityException({
-        field: 'email',
-        error: 'Email is not registered',
-      });
+      throw EmailNotFoundException;
     }
 
     const isMatch = await this.hashingService.comparePassword(body.password, user.password);
     if (!isMatch) {
-      throw new UnprocessableEntityException({
-        field: 'password',
-        error: 'Password is incorrect',
-      });
+      throw InvalidPassword;
     }
 
     const device = await this.authRepository.createDevice({
@@ -155,12 +149,14 @@ export class AuthService {
 
   async refreshToken({ refreshToken, userAgent, ip }: RefreshTokenBodyDTO & { userAgent: string; ip: string }) {
     try {
+      const { userId } = await this.tokenService.verifyRefreshToken(refreshToken);
+
       const refreshTokenRecord = await this.authRepository.findUniqueRefreshToken({
         token: refreshToken,
       });
 
       if (!refreshTokenRecord) {
-        throw new UnauthorizedException('Invalid refresh token');
+        throw RefreshTokenAlreadyUsedException;
       }
 
       const $updateDevice = this.authRepository.updateDevice(refreshTokenRecord.deviceId, {
@@ -171,7 +167,7 @@ export class AuthService {
       const $deleteRefreshToken = this.authRepository.deleteRefreshToken(refreshToken);
 
       const $tokens = this.generateTokens({
-        userId: refreshTokenRecord.user.id,
+        userId,
         roleId: refreshTokenRecord.user.roleId,
         roleName: refreshTokenRecord.user.role.name,
         deviceId: refreshTokenRecord.deviceId,
@@ -200,9 +196,54 @@ export class AuthService {
       return { message: 'Logout successfully' };
     } catch (error) {
       if (isNotFoundError(error)) {
-        throw new UnauthorizedException('Invalid refresh token');
+        throw RefreshTokenAlreadyUsedException;
       }
       throw error;
     }
+  }
+
+  async forgotPassword({ email, code, newPassword }: ForgotPasswordBodyType) {
+    //find user by email
+    const user = await this.sharedUserRepository.findUnique({ email: email });
+
+    if (!user) {
+      throw EmailNotFoundException;
+    }
+
+    const verificationCodePayload = { email, code, type: TypeOfVerificationCode.FORGOT_PASSWORD };
+
+    await this.validateVerificationCode(verificationCodePayload);
+
+    const hashPassword = await this.hashingService.hashPassword(newPassword);
+    const $updateUser = this.authRepository.updateUser(
+      { email },
+      {
+        password: hashPassword,
+      },
+    );
+
+    const $deleteVerificationCode = this.authRepository.deleteVerificationCode(verificationCodePayload);
+
+    await Promise.all([$updateUser, $deleteVerificationCode]);
+
+    return { message: 'Password changed' };
+  }
+
+  async validateVerificationCode({ email, code, type }: { email: string; code: string; type: TypeOfVerificationCode }) {
+    const verificationCode = await this.authRepository.findUniqueVerificationCode({
+      email,
+      code,
+      type,
+    });
+
+    if (!verificationCode) {
+      throw InvalidOTPException;
+    }
+
+    if (new Date(verificationCode.expiresAt) < new Date()) {
+      throw OTPExpiredException;
+    }
+
+    return verificationCode;
   }
 }
