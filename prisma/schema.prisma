@@ -27,6 +27,8 @@ enum OrderStatus {
 enum VerificationCodeType {
   REGISTER
   FORGOT_PASSWORD
+  LOGIN
+  DISABLE_2FA
 }
 
 enum UserStatus {
@@ -156,13 +158,13 @@ model UserTranslation {
 
 model VerificationCode {
   id        Int                   @id @default(autoincrement())
-  email     String                @unique @db.VarChar(255)
-  code      String                @unique @db.VarChar(10)
+  email     String                @db.VarChar(255)
+  code      String                @db.VarChar(10)
   type      VerificationCodeType
   expiresAt DateTime              @map("expires_at")
   createdAt DateTime              @default(now()) @map("created_at")
 
-  @@index([email, code, type])
+  @@unique([email, type])
   @@index([expiresAt])
   @@map("verification_codes")
 }

@@ -50,10 +50,30 @@ export const VerificationBodySchema = VerificationCodeSchema.pick({
 
 export type VerificationBodyType = z.infer<typeof VerificationBodySchema>;
 
-export const LoginBodySchema = z.object({
-  email: z.email(),
-  password: z.string(),
-});
+export const LoginBodySchema = UserSchema.pick({
+  email: true,
+  password: true,
+})
+  .extend({
+    totpCode: z.string().length(6).optional(), //mã 2FA từ các ứng dụng Authenticator
+    code: z.string().length(6).optional(), //mã OTP từ email
+  })
+  .strict()
+  .superRefine(({ totpCode, code }, ctx) => {
+    const message = 'Chỉ nên truyên totp hoặc code';
+    if (totpCode !== undefined && code !== undefined) {
+      ctx.addIssue({
+        path: ['totp'],
+        message,
+        code: 'custom',
+      });
+      ctx.addIssue({
+        path: ['code'],
+        message,
+        code: 'custom',
+      });
+    }
+  });
 
 export type LoginBodyType = z.infer<typeof LoginBodySchema>;
 
@@ -146,3 +166,34 @@ export const ForgotPasswordBodySchema = z
   });
 
 export type ForgotPasswordBodyType = z.infer<typeof ForgotPasswordBodySchema>;
+
+export const Disable2FABodySchema = z
+  .object({
+    totp: z.string().length(6).optional(),
+    code: z.string().length(6).optional(),
+  })
+  .strict()
+  .superRefine(({ totp, code }, ctx) => {
+    const message = 'Either totp or code must be provided';
+    if (!totp && !code) {
+      ctx.addIssue({
+        code: 'custom',
+        message,
+        path: ['totp'],
+      });
+      ctx.addIssue({
+        code: 'custom',
+        message,
+        path: ['code'],
+      });
+    }
+  });
+
+export type Disable2FABodyType = z.infer<typeof Disable2FABodySchema>;
+
+export const Setup2FAResSchema = z.object({
+  secret: z.string(),
+  qrCodeUrl: z.string(),
+});
+
+export type Setup2FAResType = z.infer<typeof Setup2FAResSchema>;

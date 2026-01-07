@@ -46,7 +46,7 @@ async function main() {
     const hashPassword = bcrypt.hashSync('password@123', 10);
     const userAdmin = await prisma.user.create({
       data: {
-        email: 'thanhtb170@gmail.com',
+        email: 'vtthanh1611@gmail.com',
         name: 'Vũ Tiến Thành',
         password: hashPassword,
         roleId: adminRoleId.id,

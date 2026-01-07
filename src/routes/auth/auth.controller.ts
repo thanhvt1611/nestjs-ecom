@@ -1,6 +1,7 @@
 import { Body, Controller, Headers, HttpCode, HttpStatus, Post, Query, Res } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
+  Disable2FABodyDTO,
   ForgotPasswordBodyDTO,
   GoogleAuthUrlResDTO,
   LoginBodyDTO,
@@ -10,6 +11,7 @@ import {
   RefreshTokenResDTO,
   RegisterBodyDTO,
   RegisterResDTO,
+  Setup2FAResDTO,
   VerificationBodyDTO,
 } from './auth.dto';
 import { ZodSerializerDto } from 'nestjs-zod';
@@ -20,6 +22,8 @@ import { PublicGet, PublicPost } from '../../shared/decorators/public-route.deco
 import { GoogleService } from './google.service';
 import { Response } from 'express';
 import envConfig from '../../shared/config';
+import { ActiveUser } from '../../shared/decorators/active-user.decorator';
+import { EmptyBodyDTO } from '../../shared/dtos/request.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -86,5 +90,17 @@ export class AuthController {
   @ZodSerializerDto(MessageResDTO)
   forgotPassword(@Body() body: ForgotPasswordBodyDTO) {
     return this.authService.forgotPassword(body);
+  }
+
+  @Post('2fa/setup')
+  @ZodSerializerDto(Setup2FAResDTO)
+  setup2FA(@ActiveUser('userId') userId: number, @Body() _: EmptyBodyDTO) {
+    return this.authService.setup2FA(userId);
+  }
+
+  @Post('2fa/disable')
+  @ZodSerializerDto(MessageResDTO)
+  disable2FA(@Body() body: Disable2FABodyDTO, @ActiveUser('userId') userId: number) {
+    return this.authService.disable2FA({ ...body, userId });
   }
 }

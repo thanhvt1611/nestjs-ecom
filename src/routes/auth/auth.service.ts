@@ -3,6 +3,7 @@ import { RoleService } from './role.service';
 import { HashingService } from '../../shared/services/hashing.service';
 import { isNotFoundError, isUniqueConstraintError, randomOTP } from '../../shared/helpers';
 import {
+  Disable2FABodyType,
   ForgotPasswordBodyType,
   LoginBodyType,
   RegisterBodyType,
@@ -25,9 +26,14 @@ import {
   FailedToSendOTPException,
   InvalidOTPException,
   InvalidPassword,
+  InvalidTOTPAndCodeException,
+  InvalidTOTPException,
   OTPExpiredException,
   RefreshTokenAlreadyUsedException,
+  TOTPAlreadyEnabledException,
+  TOTPNotEnabledException,
 } from './error.model';
+import { TwoFactorAuthenticationService } from '../../shared/services/2fa.service';
 
 @Injectable()
 export class AuthService {
@@ -38,18 +44,21 @@ export class AuthService {
     private readonly sharedUserRepository: SharedUserRepository,
     private readonly emailService: EmailService,
     private readonly tokenService: TokenService,
+    private readonly twoFactorAuthenticationService: TwoFactorAuthenticationService,
   ) {}
 
   async register(body: RegisterBodyType): Promise<RegisterResType> {
     try {
-      const verificationCodePayload = { email: body.email, code: body.code, type: TypeOfVerificationCode.REGISTER };
-      await this.validateVerificationCode(verificationCodePayload);
+      const verificationCodePayload = { email: body.email, type: TypeOfVerificationCode.REGISTER };
+      await this.validateVerificationCode({ ...verificationCodePayload, code: body.code });
 
       const clientRoleId = await this.roleService.getClientRoleID();
       const { confirmPassword, code, ...bodyData } = body;
       const hashPassword = await this.hashingService.hashPassword(bodyData.password);
 
-      const $deleteVerificationCode = this.authRepository.deleteVerificationCode(verificationCodePayload);
+      const $deleteVerificationCode = this.authRepository.deleteVerificationCode({
+        email_type: verificationCodePayload,
+      });
 
       const $createUser = this.authRepository.createUser({
         ...bodyData,
@@ -110,6 +119,28 @@ export class AuthService {
     const isMatch = await this.hashingService.comparePassword(body.password, user.password);
     if (!isMatch) {
       throw InvalidPassword;
+    }
+
+    if (user.totpSecret) {
+      if (!body.totpCode && !body.code) {
+        throw InvalidTOTPAndCodeException;
+      }
+      if (body.totpCode) {
+        const isValid = this.twoFactorAuthenticationService.verifyTOTP({
+          email: body.email,
+          token: body.totpCode,
+          secret: user.totpSecret,
+        });
+        if (!isValid) {
+          throw InvalidTOTPException;
+        }
+      } else if (body.code) {
+        const verificationCodePayload = { email: body.email, type: TypeOfVerificationCode.LOGIN };
+        const verificationCode = await this.validateVerificationCode({ ...verificationCodePayload, code: body.code });
+        if (verificationCode) {
+          await this.authRepository.deleteVerificationCode({ email_type: verificationCodePayload });
+        }
+      }
     }
 
     const device = await this.authRepository.createDevice({
@@ -210,9 +241,9 @@ export class AuthService {
       throw EmailNotFoundException;
     }
 
-    const verificationCodePayload = { email, code, type: TypeOfVerificationCode.FORGOT_PASSWORD };
+    const verificationCodePayload = { email, type: TypeOfVerificationCode.FORGOT_PASSWORD };
 
-    await this.validateVerificationCode(verificationCodePayload);
+    await this.validateVerificationCode({ ...verificationCodePayload, code });
 
     const hashPassword = await this.hashingService.hashPassword(newPassword);
     const $updateUser = this.authRepository.updateUser(
@@ -222,21 +253,17 @@ export class AuthService {
       },
     );
 
-    const $deleteVerificationCode = this.authRepository.deleteVerificationCode(verificationCodePayload);
+    const $deleteVerificationCode = this.authRepository.deleteVerificationCode({ email_type: verificationCodePayload });
 
     await Promise.all([$updateUser, $deleteVerificationCode]);
 
     return { message: 'Password changed' };
   }
 
-  async validateVerificationCode({ email, code, type }: { email: string; code: string; type: TypeOfVerificationCode }) {
-    const verificationCode = await this.authRepository.findUniqueVerificationCode({
-      email,
-      code,
-      type,
-    });
+  async validateVerificationCode({ email, type, code }: { email: string; type: TypeOfVerificationCode; code: string }) {
+    const verificationCode = await this.authRepository.findUniqueVerificationCode({ email_type: { email, type } });
 
-    if (!verificationCode) {
+    if (!verificationCode || verificationCode.code !== code) {
       throw InvalidOTPException;
     }
 
@@ -245,5 +272,62 @@ export class AuthService {
     }
 
     return verificationCode;
+  }
+
+  async setup2FA(userId: number) {
+    //1. kiểm tra user có tồn tại trong db hay không, nếu có thì đã bật 2fa hay chưa(có totpSecret hay chưa)
+    const user = await this.sharedUserRepository.findUniqueUserAndRole({ id: userId });
+    if (!user) {
+      throw EmailNotFoundException;
+    }
+    if (user.totpSecret) {
+      throw TOTPAlreadyEnabledException;
+    }
+    //2. nếu chưa bật 2fa thì tạo mới và lưu vào db
+    const { secret, qrCodeUrl } = this.twoFactorAuthenticationService.generateTOTPSecret(user.email);
+    await this.authRepository.updateUser(
+      { id: userId },
+      {
+        totpSecret: secret,
+      },
+    );
+    //3. trả về secret và qrCodeUrl
+    return { secret, qrCodeUrl };
+  }
+
+  async disable2FA({ totp, code, userId }: Disable2FABodyType & { userId: number }) {
+    //1. kiểm tra user có tồn tại trong db hay không, nếu có thì đã bật 2fa hay chưa(có totpSecret hay chưa)
+    const user = await this.sharedUserRepository.findUniqueUserAndRole({ id: userId });
+    if (!user) {
+      throw EmailNotFoundException;
+    }
+    if (!user.totpSecret) {
+      throw TOTPNotEnabledException;
+    }
+
+    //2. verify totp hoặc code
+    if (totp) {
+      const isValid = this.twoFactorAuthenticationService.verifyTOTP({
+        email: user.email,
+        token: totp,
+        secret: user.totpSecret,
+      });
+      if (!isValid) {
+        throw InvalidTOTPException;
+      }
+    } else if (code) {
+      const verificationCodePayload = { email: user.email, code, type: TypeOfVerificationCode.DISABLE_2FA };
+      await this.validateVerificationCode(verificationCodePayload);
+    }
+
+    //3. disable 2fa
+    await this.authRepository.updateUser(
+      { id: userId },
+      {
+        totpSecret: null,
+      },
+    );
+
+    return { message: '2FA disabled' };
   }
 }
