@@ -13,6 +13,7 @@ export const UserSchema = z.object({
   totpSecret: z.string().nullable(),
   createdById: z.number().nullable(),
   updatedById: z.number().nullable(),
+  deletedById: z.number().nullable(),
   deletedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

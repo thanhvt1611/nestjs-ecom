@@ -56,7 +56,7 @@ Nếu bạn đã có sẵn file `schema.prisma` do đang sử dụng cách `pris
    ```bash
    npx prisma migrate diff \
    --from-empty \
-   --to-schema-datamodel prisma/schema.prisma \
+   --to-schema prisma/schema.prisma \
    --script > prisma/migrations/0_init/migration.sql
    ```
 
