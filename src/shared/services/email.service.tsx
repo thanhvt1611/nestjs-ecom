@@ -3,8 +3,8 @@ import { Resend } from 'resend';
 import envConfig from '../config';
 import fs from 'fs';
 import path from 'path';
-import { OTPEmail } from 'emails/otp';
 import * as React from 'react';
+import OTPEmail from '../../../emails/otp';
 
 @Injectable()
 export class EmailService {

@@ -210,7 +210,7 @@ model RefreshToken {
 model Permission {
   id          Int        @id @default(autoincrement())
   name        String     @db.VarChar(100)
-  description String     @db.VarChar(500)
+  description String     @default("") @db.VarChar(500)
   path        String     @db.VarChar(255)
   method      HTTPMethod
 

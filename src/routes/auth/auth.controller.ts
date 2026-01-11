@@ -51,7 +51,7 @@ export class AuthController {
     return this.authService.login({ ...body, userAgent, ip });
   }
 
-  @Post('refresh-token')
+  @PublicPost('refresh-token')
   @HttpCode(HttpStatus.OK)
   @ZodSerializerDto(RefreshTokenResDTO)
   refreshToken(@Body() body: RefreshTokenBodyDTO, @Headers('User-Agent') userAgent: string, @RealIp() ip: string) {

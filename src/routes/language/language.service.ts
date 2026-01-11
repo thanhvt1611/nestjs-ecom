@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { LanguageRepository } from './language.repo';
-import { CreateLanguageBodyType, GetLanguageBodyType, UpdateLanguageBodyType } from './language.model';
+import { CreateLanguageBodyType, UpdateLanguageBodyType } from './language.model';
 import { NotFoundRecordException } from '../../shared/error';
-import { convertDatesToISO, isNotFoundError, isUniqueConstraintError } from '../../shared/helpers';
+import { isNotFoundError, isUniqueConstraintError } from '../../shared/helpers';
 import { LanguageAlreadyExistsException } from './language.error';
 
 @Injectable()
@@ -12,7 +12,7 @@ export class LanguageService {
   async getAll() {
     const data = await this.languageRepository.getAll();
     return {
-      data: data.map(convertDatesToISO),
+      data,
       totalItems: data.length,
     };
   }
@@ -22,13 +22,12 @@ export class LanguageService {
     if (!lang) {
       throw NotFoundRecordException;
     }
-    return convertDatesToISO(lang);
+    return lang;
   }
 
   async create({ code, name, userId }: CreateLanguageBodyType & { userId: number }) {
     try {
-      const lang = await this.languageRepository.create({ code, name, createdById: userId });
-      return convertDatesToISO(lang);
+      return await this.languageRepository.create({ code, name, createdById: userId });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         throw LanguageAlreadyExistsException;
@@ -39,8 +38,7 @@ export class LanguageService {
 
   async update({ id, payload, userId }: { id: string; payload: UpdateLanguageBodyType; userId: number }) {
     try {
-      const lang = await this.languageRepository.update({ id, ...payload, updatedById: userId });
-      return convertDatesToISO(lang);
+      return await this.languageRepository.update({ id, ...payload, updatedById: userId });
     } catch (error) {
       if (isNotFoundError(error)) {
         throw NotFoundRecordException;

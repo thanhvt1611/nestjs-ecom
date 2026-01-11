@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/services/prisma.service';
 import { CreateLanguageBodyType, GetLanguageBodyType, UpdateLanguageBodyType } from './language.model';
+import { SerializeAll } from '../../shared/constants/serialize.decorator';
 
 @Injectable()
+@SerializeAll()
 export class LanguageRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
